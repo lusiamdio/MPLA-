@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-mpla-red: #C8102E;
+  --color-mpla-yellow: #FFCC00;
+  --color-mpla-green: #16A34A;
+  --color-mpla-white: #FFFFFF;
+  
+  --color-primary: #C8102E;
+  --color-secondary: #FFCC00;
+}
+
+/* Base customized focus rings and smooth scrolls */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: white;
+  color: #0f172a;
+}
+
+/* Universal borderless styling - Remove all borderlines throughout the website */
+*,
+*::before,
+*::after {
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-image: none !important;
+}
+
+/* Ensure no border lines appear from hr or dividers */
+hr,
+.divide-y > *,
+.divide-x > *,
+[class*="divide-"] > * {
+  border: none !important;
+  border-width: 0 !important;
+  border-color: transparent !important;
+}
+
+/* Table cells borderless */
+table,
+thead,
+tbody,
+tr,
+th,
+td {
+  border: none !important;
+  border-collapse: collapse !important;
+}
+
+/* Logo transparent and borderless utility */
+.logo-transparent {
+  background-color: transparent !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Accessible inputs without borders */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border: none !important;
+  border-width: 0 !important;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #C8102E;
+  outline-offset: 1px;
+}
+
+/* ========================================================
+   TRANSPARENT SCROLLING BAR (Modern, Sleek, Translucent)
+   ======================================================== */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari, iOS, Android) */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.28) !important;
+  background: rgba(100, 116, 139, 0.28) !important;
+  border-radius: 9999px !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background-color 0.2s ease, background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(200, 16, 46, 0.55) !important;
+  background: rgba(200, 16, 46, 0.55) !important;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(200, 16, 46, 0.8) !important;
+  background: rgba(200, 16, 46, 0.8) !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Custom class for explicit transparent scrollbar on containers */
+.transparent-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+.transparent-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+  background: transparent !important;
+}
+.transparent-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.transparent-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.28) !important;
+  border-radius: 9999px !important;
+}
+.transparent-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(200, 16, 46, 0.55) !important;
+}
+
+/* ========================================================
+   CSS PROGRESS BAR FOR IDEOLOGIA & FORMAÇÃO CERTIFICATION
+   ======================================================== */
+@keyframes certificationStripes {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 40px 0;
+  }
+}
+
+@keyframes certificationShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes certificationGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(200, 16, 46, 0.4), 0 0 20px rgba(255, 204, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(200, 16, 46, 0.7), 0 0 35px rgba(255, 204, 0, 0.5);
+  }
+}
+
+.certification-progress-track {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  background-color: #E2E8F0;
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.certification-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.certification-progress-fill.in-progress {
+  background: linear-gradient(90deg, #C8102E 0%, #E11D48 60%, #FFCC00 100%);
+}
+
+.certification-progress-fill.completed {
+  background: linear-gradient(90deg, #10B981 0%, #059669 50%, #FFCC00 100%);
+  animation: certificationGlowPulse 2.5s infinite ease-in-out;
+}
+
+.certification-progress-striped {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.25) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.25) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 32px 32px;
+  animation: certificationStripes 1.2s linear infinite;
+}
+
+.certification-progress-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: certificationShimmer 2.5s infinite;
+}
+
+

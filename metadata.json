@@ -1,0 +1,8 @@
+{
+  "name": "MPLA Sede África do Sul Portal",
+  "description": "Plataforma Oficial de Membros do MPLA (Sede África do Sul) e Centro de Comando Administrativo HQ, com cartões digitais, academia de formação, gestão de eventos e assistência administrativa integrada.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
