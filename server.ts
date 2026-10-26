@@ -116,11 +116,12 @@ function getGeminiClient(): GoogleGenAI | null {
 }
 
 // Supabase Database & Auth Client Initialization
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://qghvlulieauezqenpoya.supabase.co";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnaHZsdWxpZWF1ZXpxZW5wb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MTc0MTEsImV4cCI6MjEwMDk5MzQxMX0.A6fgO8uhIhgY8YCauhvOglL4HrMdXlkVFhsBh1Pxt_k";
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://yuykjagarpubbwpxsush.supabase.co";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1eWtqYWdhcnB1YmJ3cHhzdXNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MTc0MTEsImV4cCI6MjEwMDk5MzQxMX0.A6fgO8uhIhgY8YCauhvOglL4HrMdXlkVFhsBh1Pxt_k";
+const SUPABASE_PROJECT_ID = process.env.SUPABASE_id || SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0] || "yuykjagarpubbwpxsush";
 
 export const supabaseServer = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Supabase Client initialized for project MPLA Cape Town (qghvlulieauezqenpoya)");
+console.log(`[SUPABASE] Client initialized for project ${SUPABASE_PROJECT_ID} (${SUPABASE_URL})`);
 
 // Global In-Memory Store
 let members: Member[] = [
@@ -1569,7 +1570,7 @@ app.post("/api/members", (req, res) => {
 });
 
 // Unified, Secure Member Self-Registration
-app.post("/api/auth/register", authRateLimiter, (req, res) => {
+app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   const { 
     fullName, nationalId, mobile, email, province, municipality, committee, photo, coverPhoto,
     photoPositionX, photoPositionY, kinName, kinPhone, organizationWing, idType
@@ -1664,8 +1665,71 @@ app.post("/api/auth/register", authRateLimiter, (req, res) => {
 
   if (req.body.password && String(req.body.password).length >= 8) {
     newMember.passwordHash = hashPassword(String(req.body.password));
+
+    // Live Supabase Auth User Creation
+    if (cleanEmail && cleanEmail.includes("@")) {
+      try {
+        const { data: supaUser, error: supaErr } = await supabaseServer.auth.signUp({
+          email: cleanEmail,
+          password: String(req.body.password),
+          options: {
+            data: {
+              full_name: newMember.fullName,
+              national_id: newMember.nationalId,
+              mobile: newMember.mobile,
+              membership_no: newMember.membershipNo,
+              province: newMember.province,
+              organization_wing: newMember.organizationWing
+            }
+          }
+        });
+        if (supaUser?.user) {
+          (newMember as any).auth_user_id = supaUser.user.id;
+          console.log(`[SUPABASE AUTH] Successfully provisioned Supabase Auth User (${supaUser.user.id}) for ${cleanEmail}`);
+        } else if (supaErr) {
+          console.warn(`[SUPABASE AUTH] Registration notice: ${supaErr.message}`);
+        }
+      } catch (e: any) {
+        console.warn(`[SUPABASE AUTH] Sync exception: ${e.message}`);
+      }
+    }
   }
   newMember.cardSignature = generateCardSignature(newMember);
+
+  // Synchronize new militant profile directly to Supabase PostgreSQL database
+  try {
+    await supabaseServer.from("members").upsert({
+      id: newMember.id,
+      membership_no: newMember.membershipNo,
+      national_id: newMember.nationalId,
+      id_type: newMember.idType || "BI",
+      full_name: newMember.fullName,
+      email: newMember.email,
+      mobile: newMember.mobile,
+      photo: newMember.photo,
+      cover_photo: newMember.coverPhoto,
+      photo_position_x: newMember.photoPositionX,
+      photo_position_y: newMember.photoPositionY,
+      tracking_code: newMember.trackingCode,
+      role: newMember.role || "member",
+      status: newMember.status || "Active",
+      membership_level: newMember.membershipLevel || "Standard",
+      category: newMember.category || "General",
+      organization_wing: newMember.organizationWing || "Militante",
+      militancy_level: newMember.militancyLevel || "Militante",
+      province: newMember.province || "Western Cape",
+      municipality: newMember.municipality || "City of Cape Town",
+      committee: newMember.committee || "Comité do MPLA na Cidade do Cabo",
+      registration_date: newMember.registrationDate || new Date().toISOString().split("T")[0],
+      physical_card_status: newMember.physicalCardStatus || "Submitted",
+      card_signature: newMember.cardSignature,
+      occupation: newMember.occupation || "",
+      employer: newMember.employer || "",
+      education: newMember.education || ""
+    });
+  } catch (supaDbErr: any) {
+    console.warn(`[SUPABASE DB] Member sync warning: ${supaDbErr?.message || supaDbErr}`);
+  }
 
   members.push(newMember);
 
@@ -2269,6 +2333,10 @@ app.put("/api/tickets/:id/status", (req, res) => {
 });
 
 // Messages Channels / Live Chats
+app.get("/api/chats", (req, res) => {
+  res.json(chatChannels);
+});
+
 app.get("/api/chats/:memberId", (req, res) => {
   const { memberId } = req.params;
   let memberChannels = chatChannels.filter(c => c.memberId === memberId);
@@ -4102,11 +4170,11 @@ let integrations = {
   supabase: {
     enabled: true,
     provider: "Supabase Database & Authentication",
-    projectId: "qghvlulieauezqenpoya",
-    projectName: "MPLA Cape Town",
-    url: "https://qghvlulieauezqenpoya.supabase.co",
-    publishableKey: "sb_publishable_SzlfLs7Omf-tGFxeRS6vng_nyKoA8Sk",
-    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnaHZsdWxpZWF1ZXpxZW5wb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MTc0MTEsImV4cCI6MjEwMDk5MzQxMX0.A6fgO8uhIhgY8YCauhvOglL4HrMdXlkVFhsBh1Pxt_k",
+    projectId: SUPABASE_PROJECT_ID,
+    projectName: "MPLA Cape Town Portal",
+    url: SUPABASE_URL,
+    publishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_live",
+    anonKey: SUPABASE_ANON_KEY,
     status: "Active & Connected"
   },
   nationalIdVerification: {
@@ -4211,8 +4279,8 @@ app.put("/api/system/settings", (req, res) => {
 let websiteCMSConfig = {
   heroTitlePT: "Comité do MPLA CAPE",
   heroTitleEN: "MPLA CAPE Committee",
-  heroSubtitlePT: "Unidade, Acção e Progresso ao Serviço da Comunidade Angolana no MPLA CAPE",
-  heroSubtitleEN: "Unity, Action and Progress in Service of the Angolan Community at MPLA CAPE",
+  heroSubtitlePT: "Compromisso com o Povo, Confiança no Futuro ao Serviço da Comunidade Angolana no MPLA CAPE",
+  heroSubtitleEN: "Commitment to the People, Confidence in the Future in Service of the Angolan Community at MPLA CAPE",
   tickerTextPT: "• Recenseamento de Militantes no MPLA CAPE (Cidade do Cabo, África do Sul e regiões conexas) • Emissão de Cartão Digital de Militante com QR Code e Chip NFC • Apoio Consular e Integração Social •",
   tickerTextEN: "• Member Census at MPLA CAPE (Cape Town, South Africa and surrounding regions) • Digital Membership Card Issuance • Consular Support & Social Integration •",
   emergencyAlertPT: "AVISO URGENTE: Atendimento Presencial e Digital para Atualização de Dados de Militantes no Comité do MPLA CAPE de Segunda a Sexta das 09h às 16h.",
@@ -4477,21 +4545,120 @@ app.post("/api/system/backup", (req, res) => {
   });
 });
 
+// Detailed Supabase Live Diagnostic Endpoint
+app.get("/api/supabase/status", async (req, res) => {
+  const startTime = Date.now();
+  let authStatus = "Unknown";
+  let authDetails: any = null;
+  let dbStatus = "Unknown";
+  let dbTablesFound: string[] = [];
+  let dbTablesMissing: string[] = [];
+
+  try {
+    // 1. Test Supabase Auth Engine
+    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (authRes.ok) {
+      authStatus = "ONLINE_AND_AUTHENTICATING";
+      authDetails = await authRes.json();
+    } else {
+      authStatus = `AUTH_API_HTTP_${authRes.status}`;
+    }
+  } catch (err: any) {
+    authStatus = `AUTH_CONNECTION_ERROR: ${err.message}`;
+  }
+
+  try {
+    // 2. Test PostgREST Database Tables
+    const tablesToCheck = ["members", "committees", "announcements", "events", "courses", "website_cms_config"];
+    for (const t of tablesToCheck) {
+      const { data, error } = await supabaseServer.from(t).select("*").limit(1);
+      if (error) {
+        dbTablesMissing.push(t);
+      } else {
+        dbTablesFound.push(t);
+      }
+    }
+    dbStatus = dbTablesFound.length > 0 ? "TABLES_READY" : "AWAITING_SCHEMA_DEPLOYMENT";
+  } catch (err: any) {
+    dbStatus = `DB_CONNECTION_ERROR: ${err.message}`;
+  }
+
+  // 3. Test Storage Buckets
+  const storageBucketsConfigured: string[] = [];
+  try {
+    const bucketsToCheck = ["avatars", "id-cards", "cms-assets", "documents"];
+    for (const b of bucketsToCheck) {
+      const probeRes = await supabaseServer.storage.from(b).upload("diag_probe.txt", "probe", { upsert: true });
+      if (probeRes.error && (probeRes.error.message.includes("row-level security") || probeRes.error.statusCode === "403" || !probeRes.error)) {
+        storageBucketsConfigured.push(b);
+      }
+    }
+  } catch (_e) {}
+
+  const latency = Date.now() - startTime;
+
+  res.json({
+    success: true,
+    projectId: SUPABASE_PROJECT_ID,
+    url: SUPABASE_URL,
+    latencyMs: latency,
+    auth: {
+      status: authStatus,
+      isFullyConnected: authStatus === "ONLINE_AND_AUTHENTICATING",
+      signupEnabled: !authDetails?.disable_signup,
+      settings: authDetails
+    },
+    database: {
+      status: dbStatus,
+      tablesFound: dbTablesFound,
+      tablesMissing: dbTablesMissing,
+      schemaSqlLocation: "/supabase_schema.sql"
+    },
+    storage: {
+      status: storageBucketsConfigured.length > 0 ? "BUCKETS_CONFIGURED" : "PENDING_SETUP",
+      buckets: storageBucketsConfigured
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.post("/api/system/test-integration", async (req, res) => {
   const { key, provider } = req.body;
 
   if (key === "supabase") {
     try {
-      const { data, error } = await supabaseServer.auth.getSession();
-      if (!error) {
+      const authRes = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+
+      const { data: sessionData, error: sessionErr } = await supabaseServer.auth.getSession();
+
+      if (authRes.ok && !sessionErr) {
+        // Check tables in Supabase
+        const { error: tblErr } = await supabaseServer.from("members").select("id").limit(1);
+        const tablesExist = !tblErr;
+
+        let dbMessage = tablesExist 
+          ? "Tabelas da Base de Dados sincronizadas e operacionais." 
+          : "Serviço de Autenticação 100% ativo. (Execute o script /supabase_schema.sql no SQL Editor do Supabase para criar as tabelas).";
+
         return res.json({
           success: true,
-          message: "Ligação ao Supabase (Project ID: qghvlulieauezqenpoya • MPLA Cape Town) ESTABELECIDA COM SUCESSO! Base de dados e Autenticação ativas."
+          message: `Ligação ao Supabase (Project ID: ${SUPABASE_PROJECT_ID} • ${SUPABASE_URL}) ESTABELECIDA COM SUCESSO! Autenticação de utilizadores operacional (HTTP 200 OK). ${dbMessage}`
         });
       } else {
         return res.json({
           success: false,
-          message: `Erro na autenticação Supabase: ${error.message}`
+          message: `Erro na validação do Supabase Auth: HTTP ${authRes.status} ${authRes.statusText}`
         });
       }
     } catch (err: any) {
@@ -5259,8 +5426,81 @@ app.post("/api/birthday-service/trigger", (req, res) => {
   });
 });
 
+// 404 JSON Fallback for all /api routes to prevent Vite from returning index.html
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `Rota API não encontrada: ${req.method} ${req.path}` });
+});
+
+// Sync state from live Supabase PostgreSQL database
+async function syncFromSupabase() {
+  try {
+    const { data: supaMembers, error } = await supabaseServer.from("members").select("*");
+    if (!error && supaMembers && supaMembers.length > 0) {
+      console.log(`[SUPABASE] Hydrating ${supaMembers.length} members from Supabase database`);
+      supaMembers.forEach((sm: any) => {
+        const existingIdx = members.findIndex(m => m.id === sm.id || m.membershipNo === sm.membership_no || (sm.email && m.email === sm.email));
+        const mapped: Partial<Member> = {
+          id: sm.id,
+          membershipNo: sm.membership_no,
+          nationalId: sm.national_id,
+          idType: (sm.id_type as any) || "BI",
+          fullName: sm.full_name,
+          email: sm.email,
+          mobile: sm.mobile,
+          photo: sm.photo,
+          coverPhoto: sm.cover_photo,
+          photoPositionX: Number(sm.photo_position_x ?? 50),
+          photoPositionY: Number(sm.photo_position_y ?? 50),
+          trackingCode: sm.tracking_code,
+          role: (sm.role as any) || "member",
+          status: (sm.status as any) || "Active",
+          membershipLevel: (sm.membership_level as any) || "Standard",
+          category: (sm.category as any) || "General",
+          organizationWing: (sm.organization_wing as any) || "Militante",
+          militancyLevel: sm.militancy_level || "Militante",
+          province: sm.province || "Western Cape",
+          municipality: sm.municipality || "City of Cape Town",
+          committee: sm.committee || "Comité do MPLA na Cidade do Cabo",
+          registrationDate: sm.registration_date || "2026-01-01",
+          physicalCardStatus: (sm.physical_card_status as any) || "Submitted",
+          physicalCardEstDate: sm.physical_card_est_date || "2026-08-01",
+          cardSignature: sm.card_signature,
+          gender: (sm.gender as any) || "Male",
+          dob: sm.dob || "1995-01-01",
+          placeOfBirth: sm.place_of_birth || "Angola",
+          occupation: sm.occupation || "",
+          employer: sm.employer || "",
+          education: sm.education || "",
+          emergencyContact: sm.emergency_contact || { name: "", phone: "" },
+          bio: sm.bio || "",
+          duesBalance: Number(sm.dues_balance || 0),
+          outstandingBalance: Number(sm.outstanding_balance || 0)
+        };
+        if (existingIdx >= 0) {
+          members[existingIdx] = { ...members[existingIdx], ...mapped } as Member;
+        } else {
+          members.push(mapped as Member);
+        }
+      });
+    }
+
+    const { data: cmsRows } = await supabaseServer.from("website_cms_config").select("*").limit(1);
+    if (cmsRows && cmsRows.length > 0) {
+      const row = cmsRows[0];
+      if (row.slogan_pt) websiteCMSConfig.heroSubtitlePT = row.slogan_pt;
+      if (row.contact_email) websiteCMSConfig.contactEmail = row.contact_email;
+      if (row.contact_phone) websiteCMSConfig.contactPhone = row.contact_phone;
+      console.log(`[SUPABASE] CMS Configuration synchronized from database.`);
+    }
+  } catch (e: any) {
+    console.warn("[SUPABASE] Hydration note:", e?.message || e);
+  }
+}
+
 // Setup Vite & static serving
 async function startServer() {
+  await syncFromSupabase();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

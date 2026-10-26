@@ -4,7 +4,7 @@ export const translations = {
   pt: {
     portalName: "MPLA Diáspora",
     committeeName: "Comité do MPLA CAPE",
-    tagline: "Unidade, Acção e Progresso",
+    tagline: "Compromisso com o Povo, Confiança no Futuro",
     home: "Início",
     about: "O Comité",
     structure: "Estruturas",
@@ -30,7 +30,7 @@ export const translations = {
   en: {
     portalName: "MPLA Diaspora",
     committeeName: "MPLA CAPE Committee",
-    tagline: "Unity, Action and Progress",
+    tagline: "Commitment to the People, Confidence in the Future",
     home: "Home",
     about: "The Committee",
     structure: "Structures",
@@ -56,7 +56,7 @@ export const translations = {
   fr: {
     portalName: "MPLA Diaspora",
     committeeName: "Comité MPLA CAPE",
-    tagline: "Unité, Action et Progrès",
+    tagline: "Engagement envers le Peuple, Confiance en l'Avenir",
     home: "Accueil",
     about: "Le Comité",
     structure: "Structures",

@@ -53,8 +53,8 @@ export default function App() {
   const [websiteConfig, setWebsiteConfig] = useState<WebsiteCMSConfig>({
     heroTitlePT: "Comité do MPLA CAPE",
     heroTitleEN: "MPLA CAPE Committee",
-    heroSubtitlePT: "Unidade, Acção e Progresso ao Serviço da Comunidade Angolana no MPLA CAPE",
-    heroSubtitleEN: "Unity, Action and Progress in Service of the Angolan Community at MPLA CAPE",
+    heroSubtitlePT: "Compromisso com o Povo, Confiança no Futuro ao Serviço da Comunidade Angolana no MPLA CAPE",
+    heroSubtitleEN: "Commitment to the People, Confidence in the Future in Service of the Angolan Community at MPLA CAPE",
     tickerTextPT: "• Recenseamento de Militantes no MPLA CAPE (Cidade do Cabo, África do Sul e regiões conexas) • Emissão de Cartão Digital de Militante com QR Code e Chip NFC • Apoio Consular e Integração Social •",
     tickerTextEN: "• Member Census at MPLA CAPE (Cape Town, South Africa and surrounding regions) • Digital Membership Card Issuance • Consular Support & Social Integration •",
     emergencyAlertPT: "AVISO URGENTE: Atendimento Presencial e Digital para Atualização de Dados de Militantes no Comité do MPLA CAPE de Segunda a Sexta das 09h às 16h.",
@@ -145,48 +145,70 @@ export default function App() {
     holograms: 4200
   });
 
+  // Safe JSON response parser guarding against HTML fallbacks and syntax errors
+  const safeParse = async <T,>(res: Response, fallback: T): Promise<T> => {
+    try {
+      if (!res.ok) return fallback;
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        return fallback;
+      }
+      const text = await res.text();
+      if (!text || text.trim().startsWith("<")) {
+        return fallback;
+      }
+      return JSON.parse(text) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
   // Fetch initial database state from Node/Express server backend
   const fetchAllData = async () => {
     try {
+      const reqHeaders = { "Accept": "application/json" };
       const chatFetchPromise = member?.id 
-        ? fetch(`/api/chats/${member.id}`)
-        : Promise.resolve(new Response(JSON.stringify([])));
+        ? fetch(`/api/chats/${member.id}`, { headers: reqHeaders })
+        : Promise.resolve(new Response(JSON.stringify([]), { headers: { "Content-Type": "application/json" } }));
 
       const [
         resM, resA, resE, resC, resP, resT, resCh, resL, resI, resN,
         resW, resLdr, resMap
       ] = await Promise.all([
-        fetch("/api/members"),
-        fetch("/api/announcements"),
-        fetch("/api/events"),
-        fetch("/api/courses"),
-        fetch("/api/polls"),
-        fetch("/api/tickets"),
+        fetch("/api/members", { headers: reqHeaders }),
+        fetch("/api/announcements", { headers: reqHeaders }),
+        fetch("/api/events", { headers: reqHeaders }),
+        fetch("/api/courses", { headers: reqHeaders }),
+        fetch("/api/polls", { headers: reqHeaders }),
+        fetch("/api/tickets", { headers: reqHeaders }),
         chatFetchPromise,
-        fetch("/api/audit-logs"),
-        fetch("/api/inventory"),
-        fetch("/api/admin/notifications"),
-        fetch("/api/admin/website-config"),
-        fetch("/api/admin/leadership"),
-        fetch("/api/admin/map-stats")
+        fetch("/api/audit-logs", { headers: reqHeaders }),
+        fetch("/api/inventory", { headers: reqHeaders }),
+        fetch("/api/admin/notifications", { headers: reqHeaders }),
+        fetch("/api/admin/website-config", { headers: reqHeaders }),
+        fetch("/api/admin/leadership", { headers: reqHeaders }),
+        fetch("/api/admin/map-stats", { headers: reqHeaders })
       ]);
 
-      const dataM = resM.ok ? await resM.json() : [];
-      const dataA = resA.ok ? await resA.json() : [];
-      const dataE = resE.ok ? await resE.json() : [];
-      const dataC = resC.ok ? await resC.json() : [];
-      const dataP = resP.ok ? await resP.json() : [];
-      const dataT = resT.ok ? await resT.json() : [];
-      const dataCh = resCh.ok ? await resCh.json() : [];
-      const dataL = resL.ok ? await resL.json() : [];
-      const dataI = resI.ok ? await resI.json() : null;
-      const dataN = resN.ok ? await resN.json() : [];
+      const dataM = await safeParse<Member[]>(resM, []);
+      const dataA = await safeParse<Announcement[]>(resA, []);
+      const dataE = await safeParse<PartyEvent[]>(resE, []);
+      const dataC = await safeParse<LearningCourse[]>(resC, []);
+      const dataP = await safeParse<any[]>(resP, []);
+      const dataT = await safeParse<SupportTicket[]>(resT, []);
+      const dataCh = await safeParse<ChatChannel[]>(resCh, []);
+      const dataL = await safeParse<SystemAuditLog[]>(resL, []);
+      const dataI = await safeParse<InventoryStats | null>(resI, null);
+      const dataN = await safeParse<AdminNotification[]>(resN, []);
+      const dataW = await safeParse<WebsiteCMSConfig | null>(resW, null);
+      const dataLdr = await safeParse<LeadershipMember[] | null>(resLdr, null);
+      const dataMap = await safeParse<Record<string, MapProvinceStat> | null>(resMap, null);
 
-      if (resW.ok) setWebsiteConfig(await resW.json());
-      if (resLdr.ok) setLeadership(await resLdr.json());
-      if (resMap.ok) setMapStats(await resMap.json());
+      if (dataW) setWebsiteConfig(dataW);
+      if (dataLdr && Array.isArray(dataLdr)) setLeadership(dataLdr);
+      if (dataMap && typeof dataMap === "object") setMapStats(dataMap);
 
-      if (Array.isArray(dataM)) {
+      if (Array.isArray(dataM) && dataM.length > 0) {
         setMembers(dataM);
         if (member?.id) {
           const active = dataM.find((m: any) => m.id === member.id || m.email === member.email);
@@ -203,9 +225,9 @@ export default function App() {
       if (Array.isArray(dataCh)) setChatChannels(dataCh);
       if (Array.isArray(dataL)) setAuditLogs(dataL);
       if (Array.isArray(dataN)) setAdminNotifications(dataN);
-      if (dataI && typeof dataI === "object" && !dataI.error) setInventory(dataI);
+      if (dataI && typeof dataI === "object" && !(dataI as any).error) setInventory(dataI);
     } catch (e) {
-      console.error("Error fetching full database state: ", e);
+      console.warn("Notice: Syncing database state: ", e);
     }
   };
 

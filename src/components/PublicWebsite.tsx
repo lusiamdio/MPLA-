@@ -850,7 +850,7 @@ export default function PublicWebsite({
                 MPLA África do Sul
               </h2>
               <p className="text-[9px] text-[#D4AF37] font-mono font-black tracking-widest mt-1 uppercase">
-                {language === "PT" ? "UNIDADE, LUTA, PROGRESSO" : language === "FR" ? "UNITÉ, LUTTE, PROGRÈS" : "UNITY, STRUGGLE, PROGRESS"}
+                {language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : language === "FR" ? "Engagement envers le Peuple, Confiance en l'Avenir" : "Commitment to the People, Confidence in the Future"}
               </p>
             </div>
           </a>
@@ -1816,10 +1816,14 @@ export default function PublicWebsite({
               <p className="text-sm font-semibold text-[#D4AF37] tracking-wider uppercase font-mono">
                 {language === "PT" ? "Juventude do Movimento Popular de Libertação de Angola" : "Youth of the Popular Movement for the Liberation of Angola"}
               </p>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[#D4AF37] font-mono text-xs font-bold uppercase tracking-wider shadow-2xs">
+                <span>★</span>
+                <span>{language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}</span>
+              </div>
               <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-xs sm:text-sm font-light">
                 {language === "PT" 
-                  ? "A JMPLA na África do Sul é o motor dinâmico que mobiliza, capacita e integra a juventude angolana na diáspora. Focamo-nos no desenvolvimento de líderes do amanhã, através de programas académicos, mentorias de carreira, eventos culturais e integração tecnológica."
-                  : "JMPLA in South Africa is the dynamic engine mobilizing, empowering, and integrating Angolan youth in the diaspora. We focus on developing the leaders of tomorrow through academic programs, career mentorship, cultural events, and technological integration."}
+                  ? "A JMPLA na África do Sul é o motor dinâmico que mobiliza, capacita e integra a juventude angolana na diáspora. Sob o lema «Compromisso com o Povo, Confiança no Futuro», focamo-nos no desenvolvimento de líderes do amanhã, através de programas académicos, mentorias de carreira, eventos culturais e integração tecnológica."
+                  : "JMPLA in South Africa is the dynamic engine mobilizing, empowering, and integrating Angolan youth in the diaspora. Under the motto «Commitment to the People, Confidence in the Future», we focus on developing the leaders of tomorrow through academic programs, career mentorship, cultural events, and technological integration."}
               </p>
 
               {/* Grid of Initiatives */}
@@ -1937,8 +1941,8 @@ export default function PublicWebsite({
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white uppercase">
                     {language === "PT" ? "Juventude do MPLA" : "MPLA Youth Wing"}
                   </h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {language === "PT" ? "Por Angola ao encontro do futuro!" : "For Angola, towards the future!"}
+                  <p className="text-[10px] text-[#D4AF37] font-mono font-bold tracking-wider mt-0.5">
+                    {language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}
                   </p>
                 </div>
               </div>
@@ -1967,9 +1971,12 @@ export default function PublicWebsite({
                     <span className="px-2.5 py-1 bg-[#B5121B] text-white text-[9px] font-mono font-bold uppercase rounded-sm block mb-1.5 w-max">
                       {language === "PT" ? "DELEGADAS OMA" : "OMA DELEGATES"}
                     </span>
-                    <h4 className="text-base font-serif font-bold text-white">
+                    <h4 className="text-base font-serif font-bold text-white mb-1">
                       {language === "PT" ? "Organização da Mulher Angolana na Diáspora" : "Organization of Angolan Women in Diaspora"}
                     </h4>
+                    <p className="text-[10px] text-[#D4AF37] font-mono font-bold tracking-wider">
+                      {language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1989,6 +1996,25 @@ export default function PublicWebsite({
                   <span className="text-[9px] text-slate-500 font-semibold uppercase">{language === "PT" ? "Dedicadas" : "Dedicated"}</span>
                 </div>
               </div>
+
+              {/* Decorative Banner Block with MPLA Party Logo */}
+              <div className="bg-slate-50 dark:bg-neutral-900 border border-slate-200/60 dark:border-neutral-800 rounded-2xl p-4 flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center p-1 shrink-0 shadow-xs">
+                  <img 
+                    src={LOCAL_MPLA_PARTY_LOGO} 
+                    alt="MPLA OMA" 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white uppercase">
+                    {language === "PT" ? "Organização da Mulher Angolana" : "Angolan Women's Organization"}
+                  </h4>
+                  <p className="text-[10px] text-[#B5121B] font-mono font-bold tracking-wider mt-0.5">
+                    {language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Right Column: Mission and Programs */}
@@ -1999,10 +2025,14 @@ export default function PublicWebsite({
               <p className="text-sm font-semibold text-[#B5121B] tracking-wider uppercase font-mono">
                 {language === "PT" ? "Organização da Mulher Angolana" : "Organization of Angolan Women"}
               </p>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-[#B5121B] font-mono text-xs font-bold uppercase tracking-wider shadow-2xs">
+                <span>★</span>
+                <span>{language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}</span>
+              </div>
               <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-xs sm:text-sm font-light">
                 {language === "PT" 
-                  ? "A OMA é o pilar de solidariedade, igualdade e apoio social das famílias angolanas na África do Sul. A nossa missão reside em defender os direitos das mulheres, apoiar a inclusão financeira e garantir amparo direto a mães, crianças e compatriotas em situação de vulnerabilidade migratória."
-                  : "OMA is the pillars of solidarity, equality, and social support for Angolan families in South Africa. Our mission lies in defending women's rights, supporting financial inclusion, and providing direct welfare to mothers, children, and compatriots in vulnerable migration states."}
+                  ? "A OMA é o pilar de solidariedade, igualdade e apoio social das famílias angolanas na África do Sul. Guiadas pelo lema «Compromisso com o Povo, Confiança no Futuro», a nossa missão reside em defender os direitos das mulheres, apoiar a inclusão financeira e garantir amparo direto a mães, crianças e compatriotas em situação de vulnerabilidade migratória."
+                  : "OMA is the pillar of solidarity, equality, and social support for Angolan families in South Africa. Guided by the motto «Commitment to the People, Confidence in the Future», our mission lies in defending women's rights, supporting financial inclusion, and providing direct welfare to mothers, children, and compatriots in vulnerable migration states."}
               </p>
 
               {/* Core Programs Stack */}
@@ -3306,7 +3336,7 @@ export default function PublicWebsite({
                 : "Unified civic and service portal for Angolans organized in the global diaspora. Consular assistance, social integration, and trade."}
             </p>
             <p className="text-[10px] font-mono text-[#D4AF37] font-bold">
-              {language === "PT" ? "UNIDADE, LUTA, PROGRESSO" : "UNITY, STRUGGLE, PROGRESS"}
+              {language === "PT" ? "Compromisso com o Povo, Confiança no Futuro" : "Commitment to the People, Confidence in the Future"}
             </p>
           </div>
 
