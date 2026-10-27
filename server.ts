@@ -93,6 +93,83 @@ function verifyPassword(password: string, storedHash: string): boolean {
   return timingSafeEqual(originalHash, testHash);
 }
 
+// Persistent Credentials & Password Hash Vault
+const CREDENTIALS_VAULT_PATH = path.join(process.cwd(), "data", "credentials_vault.json");
+const credentialsVault = new Map<string, string>(); // identifier (lower email / memNo / id / phone) -> passwordHash
+
+function loadCredentialsVault(): void {
+  try {
+    if (fs.existsSync(CREDENTIALS_VAULT_PATH)) {
+      const raw = fs.readFileSync(CREDENTIALS_VAULT_PATH, "utf-8");
+      const data = JSON.parse(raw);
+      for (const [k, v] of Object.entries(data)) {
+        if (typeof v === "string") {
+          credentialsVault.set(k.toLowerCase().trim(), v);
+        }
+      }
+      console.log(`[CREDENTIALS VAULT] Loaded ${credentialsVault.size} credentials entries from vault.`);
+    }
+  } catch (err: any) {
+    console.warn("[CREDENTIALS VAULT] Warning loading vault:", err?.message || err);
+  }
+}
+
+function saveCredentialsVault(): void {
+  try {
+    const dir = path.dirname(CREDENTIALS_VAULT_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const obj: Record<string, string> = {};
+    for (const [k, v] of credentialsVault.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(CREDENTIALS_VAULT_PATH, JSON.stringify(obj, null, 2), "utf-8");
+  } catch (err: any) {
+    console.warn("[CREDENTIALS VAULT] Warning saving vault:", err?.message || err);
+  }
+}
+
+function recordMemberPassword(member: Partial<Member>, passwordHash: string): void {
+  if (!passwordHash) return;
+  if (member.id) credentialsVault.set(member.id.toLowerCase().trim(), passwordHash);
+  if (member.email) credentialsVault.set(member.email.toLowerCase().trim(), passwordHash);
+  if (member.membershipNo) credentialsVault.set(member.membershipNo.toLowerCase().trim(), passwordHash);
+  if (member.nationalId) credentialsVault.set(member.nationalId.toLowerCase().trim(), passwordHash);
+  if (member.mobile) {
+    const digits = member.mobile.replace(/[^0-9]/g, '');
+    if (digits.length >= 9) credentialsVault.set(digits, passwordHash);
+  }
+  saveCredentialsVault();
+
+  // Persist password_hash directly to Supabase members table
+  try {
+    if (member.id) {
+      Promise.resolve(supabaseServer.from("members").update({ password_hash: passwordHash }).eq("id", member.id)).catch(() => {});
+    } else if (member.email) {
+      Promise.resolve(supabaseServer.from("members").update({ password_hash: passwordHash }).eq("email", member.email)).catch(() => {});
+    }
+  } catch (_e) {}
+}
+
+function getStoredPasswordHash(identifier: string, member?: Partial<Member> | null): string | null {
+  const clean = identifier.toLowerCase().trim();
+  const cleanPhone = identifier.replace(/[^0-9]/g, '');
+
+  if (credentialsVault.has(clean)) return credentialsVault.get(clean)!;
+  if (cleanPhone.length >= 9 && credentialsVault.has(cleanPhone)) return credentialsVault.get(cleanPhone)!;
+
+  if (member) {
+    if (member.passwordHash) return member.passwordHash;
+    if (member.id && credentialsVault.has(member.id.toLowerCase().trim())) return credentialsVault.get(member.id.toLowerCase().trim())!;
+    if (member.email && credentialsVault.has(member.email.toLowerCase().trim())) return credentialsVault.get(member.email.toLowerCase().trim())!;
+    if (member.membershipNo && credentialsVault.has(member.membershipNo.toLowerCase().trim())) return credentialsVault.get(member.membershipNo.toLowerCase().trim())!;
+    if (member.nationalId && credentialsVault.has(member.nationalId.toLowerCase().trim())) return credentialsVault.get(member.nationalId.toLowerCase().trim())!;
+  }
+
+  return null;
+}
+
+loadCredentialsVault();
+
 const PORT = 3000;
 
 // Lazy initialization of Gemini API
@@ -1369,7 +1446,7 @@ app.get("/api/generate-membership-no", (req, res) => {
 });
 
 // Authentication API
-app.post("/api/auth/login", authRateLimiter, (req, res) => {
+app.post("/api/auth/login", authRateLimiter, async (req, res) => {
   const { identifier, password, role, otpCode } = req.body;
   if (!identifier) {
     return res.status(400).json({ error: "Identification details are required to login." });
@@ -1436,7 +1513,7 @@ app.post("/api/auth/login", authRateLimiter, (req, res) => {
     otpStore.delete(cleanKey);
   }
 
-  const found = members.find(m => {
+  let found = members.find(m => {
     const mEmail = (m.email || '').toLowerCase().trim();
     const mNo = (m.membershipNo || '').toLowerCase().trim();
     const mNatId = (m.nationalId || '').toLowerCase().trim();
@@ -1451,16 +1528,95 @@ app.post("/api/auth/login", authRateLimiter, (req, res) => {
     return false;
   });
 
-  if (found) {
-    // If member has password set, verify if password was provided and valid (unless authenticated via OTP)
-    if (found.passwordHash && !otpCode) {
-      if (!password || !verifyPassword(password, found.passwordHash)) {
-        logAction(found.fullName, "Authentication", "Member Login Failed", `Incorrect password for member: ${identifier}`);
-        return res.status(401).json({ error: "Palavra-passe de militante incorrecta. Pode também solicitar um código OTP móvel para autenticação rápida." });
+  // If not found in local memory, check live Supabase PostgreSQL database
+  if (!found) {
+    try {
+      const { data: supaMember, error: smErr } = await supabaseServer
+        .from("members")
+        .select("*")
+        .or(`email.ilike.${query},membership_no.ilike.${query},national_id.ilike.${query}`)
+        .maybeSingle();
+
+      if (supaMember && !smErr) {
+        const mappedMember: Member = {
+          id: supaMember.id,
+          membershipNo: supaMember.membership_no,
+          nationalId: supaMember.national_id,
+          idType: (supaMember.id_type as any) || "BI",
+          fullName: supaMember.full_name,
+          email: supaMember.email,
+          mobile: supaMember.mobile,
+          photo: supaMember.photo,
+          coverPhoto: supaMember.cover_photo,
+          photoPositionX: Number(supaMember.photo_position_x ?? 50),
+          photoPositionY: Number(supaMember.photo_position_y ?? 50),
+          trackingCode: supaMember.tracking_code,
+          role: (supaMember.role as any) || "member",
+          status: (supaMember.status as any) || "Active",
+          membershipLevel: (supaMember.membership_level as any) || "Standard",
+          category: (supaMember.category as any) || "General",
+          organizationWing: (supaMember.organization_wing as any) || "Militante",
+          militancyLevel: supaMember.militancy_level || "Militante",
+          province: supaMember.province || "Western Cape",
+          municipality: supaMember.municipality || "City of Cape Town",
+          committee: supaMember.committee || "Comité do MPLA na Cidade do Cabo",
+          registrationDate: supaMember.registration_date || new Date().toISOString().split("T")[0],
+          physicalCardStatus: (supaMember.physical_card_status as any) || "Submitted",
+          physicalCardEstDate: supaMember.physical_card_est_date || "2026-08-01",
+          cardSignature: supaMember.card_signature,
+          gender: (supaMember.gender as any) || "Other",
+          dob: supaMember.dob || "1990-01-01",
+          maritalStatus: (supaMember.marital_status as any) || "Single",
+          emergencyContact: supaMember.emergency_contact || { name: "Contacto de Emergência", phone: supaMember.mobile || "+27 82 000 0000" },
+          occupation: supaMember.occupation || "Militante",
+          employer: supaMember.employer || "Independente",
+          education: supaMember.education || "Ensino Secundário",
+          outstandingBalance: Number(supaMember.outstanding_balance || 0),
+          duesBalance: Number(supaMember.dues_balance || 0),
+          leadershipRoles: [],
+          registeredEvents: [],
+          completedCourses: [],
+          votedPolls: {}
+        };
+        members.push(mappedMember);
+        found = mappedMember;
       }
-    } else if (!found.passwordHash && password && password.length >= 8) {
+    } catch (dbErr) {
+      console.warn("[SUPABASE] Member query warning:", dbErr);
+    }
+  }
+
+  // Check Supabase Auth engine if password provided (by query email or by found.email)
+  const authTargetEmail = query.includes("@") ? query : (found?.email || "");
+  if (password && authTargetEmail) {
+    try {
+      const { data: supaAuthData } = await supabaseServer.auth.signInWithPassword({
+        email: authTargetEmail,
+        password: String(password)
+      });
+      if (supaAuthData?.user && found) {
+        (found as any).auth_user_id = supaAuthData.user.id;
+        const newHash = hashPassword(password);
+        found.passwordHash = newHash;
+        recordMemberPassword(found, newHash);
+      }
+    } catch (_authErr) {}
+  }
+
+  if (found) {
+    const storedHash = getStoredPasswordHash(identifier, found);
+
+    // If member has password set, verify if password was provided and valid (unless authenticated via OTP)
+    if (storedHash && !otpCode) {
+      if (!password || !verifyPassword(password, storedHash)) {
+        logAction(found.fullName, "Authentication", "Member Login Failed", `Incorrect password for member: ${identifier}`);
+        return res.status(401).json({ error: "Palavra-passe de militante incorrecta. Por favor, verifique a sua senha ou solicite um código OTP móvel." });
+      }
+    } else if (!storedHash && password && password.length >= 8) {
       // Set initial password hash on first password login
-      found.passwordHash = hashPassword(password);
+      const newHash = hashPassword(password);
+      found.passwordHash = newHash;
+      recordMemberPassword(found, newHash);
     }
 
     if (!found.cardSignature) {
@@ -1573,7 +1729,7 @@ app.post("/api/members", (req, res) => {
 app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   const { 
     fullName, nationalId, mobile, email, province, municipality, committee, photo, coverPhoto,
-    photoPositionX, photoPositionY, kinName, kinPhone, organizationWing, idType
+    photoPositionX, photoPositionY, kinName, kinPhone, organizationWing, idType, password
   } = req.body;
 
   if (!fullName || !nationalId || !mobile || !email) {
@@ -1583,13 +1739,74 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanNatId = String(nationalId).trim().toUpperCase();
 
-  const duplicate = members.find(m => 
+  // Check if member already exists (e.g. from seed data or prior registration)
+  const existingIdx = members.findIndex(m => 
     (m.nationalId && m.nationalId.trim().toUpperCase() === cleanNatId) || 
     (m.email && m.email.trim().toLowerCase() === cleanEmail)
   );
 
-  if (duplicate) {
-    return res.status(400).json({ error: "Já existe um militante registado com este Bilhete de Identidade ou E-mail." });
+  if (existingIdx !== -1) {
+    const existing = members[existingIdx];
+    // If user is registering to claim / activate credentials:
+    if (!existing.passwordHash || (password && String(password).length >= 8)) {
+      if (password) {
+        existing.passwordHash = hashPassword(String(password));
+        recordMemberPassword(existing, existing.passwordHash);
+      }
+      existing.fullName = fullName ? String(fullName).trim() : existing.fullName;
+      existing.mobile = mobile ? String(mobile).trim() : existing.mobile;
+      if (photo) existing.photo = photo;
+      if (organizationWing) existing.organizationWing = organizationWing;
+
+      // Also create/link in Supabase Auth
+      if (cleanEmail && password) {
+        try {
+          const { data: saUser } = await supabaseServer.auth.signUp({
+            email: cleanEmail,
+            password: String(password),
+            options: {
+              data: {
+                full_name: existing.fullName,
+                national_id: existing.nationalId,
+                mobile: existing.mobile,
+                membership_no: existing.membershipNo
+              }
+            }
+          });
+          if (saUser?.user) {
+            (existing as any).auth_user_id = saUser.user.id;
+          }
+        } catch (_e) {}
+      }
+
+      // Sync updated credentials to Supabase members
+      try {
+        const { error: upErr } = await supabaseServer.from("members").upsert({
+          id: existing.id,
+          membership_no: existing.membershipNo,
+          national_id: existing.nationalId,
+          id_type: existing.idType || "BI",
+          full_name: existing.fullName,
+          email: existing.email,
+          mobile: existing.mobile,
+          photo: existing.photo,
+          role: existing.role || "member",
+          status: existing.status || "Active",
+          organization_wing: existing.organizationWing || "Militante"
+        });
+        if (upErr) {
+          console.warn("[SUPABASE] Member update warning:", upErr.message);
+        } else {
+          console.log(`[SUPABASE] Updated existing member ${existing.membershipNo} successfully`);
+        }
+      } catch (_e) {}
+
+      logAction(existing.fullName, "Member Registration", "Account Activated", `Activated credentials for militante: ${existing.membershipNo}`);
+      const { passwordHash: _ph, virtualCardCvv: _cvv, ...safeUser } = existing;
+      return res.status(200).json({ success: true, user: safeUser, role: existing.role || "member", message: "Conta de militante ativada com sucesso." });
+    }
+
+    return res.status(400).json({ error: "Já existe um militante registado com este Bilhete de Identidade ou E-mail. Por favor, inicie sessão com as suas credenciais." });
   }
 
   const wing = organizationWing || req.body.organizationWing || "Militante";
@@ -1598,12 +1815,10 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   if (wing === "OMA") militancyLevel = "Militante / OMA";
 
   const newId = `m-${Date.now()}`;
-  const randomNo = Math.floor(1000 + Math.random() * 9000);
   const provCodes: { [key: string]: string } = {
     "Gauteng": "GP", "Western Cape": "WC", "KwaZulu-Natal": "KZN", "Eastern Cape": "EC",
     "Free State": "FS", "Limpopo": "LP", "Mpumalanga": "MP", "North West": "NW", "Northern Cape": "NC"
   };
-  const provCode = provCodes[province] || "ZA";
   const userProvidedNo = req.body.membershipNo ? String(req.body.membershipNo).trim().toUpperCase() : "";
   const membershipNo = userProvidedNo || generateUniqueMembershipNo(members, province || "ZA");
   const trackingCode = `MPLA-CT-2026-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -1663,15 +1878,16 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     virtualCardStatus: 'Active'
   };
 
-  if (req.body.password && String(req.body.password).length >= 8) {
-    newMember.passwordHash = hashPassword(String(req.body.password));
+  if (password && String(password).length >= 8) {
+    newMember.passwordHash = hashPassword(String(password));
+    recordMemberPassword(newMember, newMember.passwordHash);
 
     // Live Supabase Auth User Creation
     if (cleanEmail && cleanEmail.includes("@")) {
       try {
         const { data: supaUser, error: supaErr } = await supabaseServer.auth.signUp({
           email: cleanEmail,
-          password: String(req.body.password),
+          password: String(password),
           options: {
             data: {
               full_name: newMember.fullName,
@@ -1698,7 +1914,7 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
 
   // Synchronize new militant profile directly to Supabase PostgreSQL database
   try {
-    await supabaseServer.from("members").upsert({
+    const { error: supaDbErr } = await supabaseServer.from("members").upsert({
       id: newMember.id,
       membership_no: newMember.membershipNo,
       national_id: newMember.nationalId,
@@ -1727,6 +1943,12 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
       employer: newMember.employer || "",
       education: newMember.education || ""
     });
+
+    if (supaDbErr) {
+      console.warn(`[SUPABASE DB NOTICE] Member insert note: ${supaDbErr.code} - ${supaDbErr.message}`);
+    } else {
+      console.log(`[SUPABASE DB SUCCESS] Member ${newMember.membershipNo} saved to Supabase!`);
+    }
   } catch (supaDbErr: any) {
     console.warn(`[SUPABASE DB] Member sync warning: ${supaDbErr?.message || supaDbErr}`);
   }
@@ -5476,8 +5698,18 @@ async function syncFromSupabase() {
           duesBalance: Number(sm.dues_balance || 0),
           outstandingBalance: Number(sm.outstanding_balance || 0)
         };
+        const savedPasswordHash = sm.password_hash || getStoredPasswordHash(sm.id, sm);
+        if (savedPasswordHash) {
+          mapped.passwordHash = savedPasswordHash;
+        }
+
         if (existingIdx >= 0) {
-          members[existingIdx] = { ...members[existingIdx], ...mapped } as Member;
+          const preservedHash = members[existingIdx].passwordHash || savedPasswordHash;
+          members[existingIdx] = { 
+            ...members[existingIdx], 
+            ...mapped, 
+            ...(preservedHash ? { passwordHash: preservedHash } : {}) 
+          } as Member;
         } else {
           members.push(mapped as Member);
         }
