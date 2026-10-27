@@ -5,6 +5,7 @@ import {
   MapPin, Calendar, Briefcase, CreditCard
 } from "lucide-react";
 import { PHOTO_SAMPLES, COVER_SAMPLES, LOCAL_MPLA_PARTY_LOGO } from "../images";
+import { validateAngolanIdentification, sanitizeAngolanIdInput } from "../utils/angolanIdValidator";
 
 // Global Diaspora regional mapping for adaptive dropdowns
 const PROVINCE_MAPPING: { 
@@ -352,12 +353,19 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
         setErrorMsg("Por favor, preencha o Lugar de Nascimento, Data de Nascimento e a sua Profissão.");
         return;
       }
-      if (signUpData.nationalId.length < 6) {
-        setErrorMsg("Por favor, introduza um Número de Documento de Identificação válido.");
+      const idValidation = validateAngolanIdentification(signUpData.nationalId, signUpData.idType);
+      if (!idValidation.valid) {
+        setErrorMsg(idValidation.error || "Número de identificação inválido. O Passaporte deve ter o formato NXXXXXXX (ex: N1234567) e o BI deve ter o formato XXXXXXXXXLAXXX (ex: 004928172LA042).");
         return;
       }
+      const updated = {
+        ...signUpData,
+        nationalId: idValidation.formatted,
+        idType: idValidation.idType
+      };
+      setSignUpData(updated);
       setSignUpStep(2);
-      saveSignUpDraft(signUpData, 2);
+      saveSignUpDraft(updated, 2);
     } else if (signUpStep === 2) {
       if (!signUpData.email || !signUpData.password || !signUpData.confirmPassword) {
         setErrorMsg("Por favor, preencha todos os campos de e-mail e palavra-passe.");
@@ -939,39 +947,43 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
                     </div>
 
                     {/* ID Type Selection (BI or Passport) & Number */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-xs font-semibold text-[#111827]">Tipo de Documento de Identificação</label>
-                        <div className="flex gap-2">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="block text-xs font-semibold text-[#111827]">
+                          Tipo de Documento de Identificação de Angola
+                        </label>
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
                             onClick={() => {
-                              const updated = { ...signUpData, idType: "BI" as const };
+                              const sanitized = sanitizeAngolanIdInput(signUpData.nationalId, "BI");
+                              const updated = { ...signUpData, idType: "BI" as const, nationalId: sanitized };
                               setSignUpData(updated);
                               saveSignUpDraft(updated, 1);
                             }}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
                               signUpData.idType === "BI"
-                                ? "bg-[#C8102E] text-white"
+                                ? "bg-[#C8102E] text-white shadow-xs"
                                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                             }`}
                           >
-                            Bilhete de Identidade (B.I.)
+                            B.I. de Angola (XXXXXXXXXLAXXX)
                           </button>
                           <button
                             type="button"
                             onClick={() => {
-                              const updated = { ...signUpData, idType: "Passport" as const };
+                              const sanitized = sanitizeAngolanIdInput(signUpData.nationalId, "Passport");
+                              const updated = { ...signUpData, idType: "Passport" as const, nationalId: sanitized };
                               setSignUpData(updated);
                               saveSignUpDraft(updated, 1);
                             }}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
                               signUpData.idType === "Passport"
-                                ? "bg-[#C8102E] text-white"
+                                ? "bg-[#C8102E] text-white shadow-xs"
                                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                             }`}
                           >
-                            Passaporte
+                            Passaporte (NXXXXXXX)
                           </button>
                         </div>
                       </div>
@@ -981,16 +993,106 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
                         <input
                           type="text"
                           required
-                          placeholder={signUpData.idType === "Passport" ? "ex: N1234567 (Passaporte)" : "ex: 004928172LA042 (B.I.)"}
+                          maxLength={signUpData.idType === "Passport" ? 8 : 14}
+                          placeholder={
+                            signUpData.idType === "Passport" 
+                              ? "NXXXXXXX (ex: N1234567)" 
+                              : "XXXXXXXXXLAXXX (ex: 004928172LA042)"
+                          }
                           value={signUpData.nationalId}
                           onChange={(e) => {
-                            const updated = { ...signUpData, nationalId: e.target.value };
+                            const raw = e.target.value.trim().toUpperCase();
+                            // Auto-detect type if user types 'N' or digits
+                            let detectedType = signUpData.idType;
+                            if (raw.startsWith('N') && signUpData.idType !== 'Passport') {
+                              detectedType = 'Passport';
+                            } else if (/^\d/.test(raw) && signUpData.idType !== 'BI') {
+                              detectedType = 'BI';
+                            }
+                            const sanitized = sanitizeAngolanIdInput(raw, detectedType);
+                            const updated = { 
+                              ...signUpData, 
+                              nationalId: sanitized,
+                              idType: detectedType
+                            };
                             setSignUpData(updated);
                             saveSignUpDraft(updated, 1);
                           }}
-                          className="block w-full pl-11 pr-4 py-3 bg-white border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#6B7280] focus:ring-1 focus:ring-[#C8102E] h-[52px] focus:outline-hidden font-mono"
+                          className="block w-full pl-11 pr-24 py-3 bg-white border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] focus:ring-2 focus:ring-[#C8102E] h-[52px] focus:outline-hidden font-mono font-bold tracking-wider uppercase"
                         />
+                        <div className="absolute right-3 top-3.5 flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {signUpData.nationalId.length}/{signUpData.idType === "Passport" ? 8 : 14}
+                          </span>
+                        </div>
                       </div>
+
+                      {/* Live Validation & Format Feedback Card */}
+                      {(() => {
+                        const valResult = validateAngolanIdentification(signUpData.nationalId, signUpData.idType);
+                        if (!signUpData.nationalId) {
+                          return (
+                            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-slate-600">
+                              <p className="text-[11px] leading-relaxed">
+                                {signUpData.idType === "Passport" ? (
+                                  <>
+                                    <strong className="text-slate-900 font-semibold">Passaporte Angolano:</strong> Letra <span className="font-mono font-bold text-[#C8102E]">N</span> maiúscula seguida de exatamente 7 dígitos numéricos (8 caracteres no total, ex: <span className="font-mono font-bold">N1234567</span>).
+                                  </>
+                                ) : (
+                                  <>
+                                    <strong className="text-slate-900 font-semibold">Bilhete de Identidade (BI):</strong> 9 dígitos + 2 letras maiúsculas provinciais (ex: <span className="font-mono font-bold text-[#C8102E]">LA</span> para Luanda) + 3 dígitos (14 caracteres no total, ex: <span className="font-mono font-bold">004928172LA042</span>).
+                                  </>
+                                )}
+                              </p>
+                              <div className="flex items-center gap-2 pt-0.5">
+                                <span className="text-[10px] text-slate-400">Exemplos rápidos:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const sample = signUpData.idType === "Passport" ? "N1234567" : "004928172LA042";
+                                    const updated = { ...signUpData, nationalId: sample };
+                                    setSignUpData(updated);
+                                    saveSignUpDraft(updated, 1);
+                                  }}
+                                  className="text-[10px] font-mono font-bold text-[#C8102E] hover:underline cursor-pointer"
+                                >
+                                  Usar {signUpData.idType === "Passport" ? "N1234567" : "004928172LA042"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (valResult.valid) {
+                          return (
+                            <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div className="leading-snug">
+                                <span className="font-bold">
+                                  {valResult.idType === "Passport" 
+                                    ? "Passaporte Angolano Válido (NXXXXXXX)" 
+                                    : "Bilhete de Identidade Válido (XXXXXXXXXLAXXX)"}:
+                                </span>{" "}
+                                <span className="font-mono font-extrabold text-emerald-800">{valResult.formatted}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5 leading-snug">
+                              <p className="font-bold text-amber-950">{valResult.error}</p>
+                              <p className="text-[11px] text-amber-800">
+                                {signUpData.idType === "Passport" 
+                                  ? "Formato exigido: NXXXXXXX (ex: N1234567)" 
+                                  : "Formato exigido: XXXXXXXXXLAXXX (ex: 004928172LA042)"}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Lugar de Nascimento & Data de Nascimento */}
@@ -1532,7 +1634,10 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
                           />
                           <div className="pt-4">
                             <p className="font-extrabold text-[#111827] text-sm">{signUpData.fullName}</p>
-                            <p className="text-[#6B7280] text-[11px]">BI: {signUpData.nationalId}</p>
+                            <p className="text-[#6B7280] text-[11px] font-mono">
+                              {signUpData.idType === "Passport" ? "Passaporte: " : "B.I.: "}
+                              <span className="font-bold text-slate-800">{signUpData.nationalId}</span>
+                            </p>
                           </div>
                         </div>
                       </div>

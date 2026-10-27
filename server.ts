@@ -18,6 +18,13 @@ import {
   SystemAuditLog,
   InventoryStats
 } from "./src/types";
+import {
+  validateAngolanIdentification,
+  validateAngolanPassport,
+  validateAngolanBI,
+  ANGOLAN_PASSPORT_REGEX,
+  ANGOLAN_BI_REGEX
+} from "./src/utils/angolanIdValidator";
 
 dotenv.config();
 
@@ -1707,11 +1714,22 @@ app.post("/api/members", (req, res) => {
   const userProvidedNo = req.body.membershipNo ? String(req.body.membershipNo).trim().toUpperCase() : "";
   const finalMembershipNo = userProvidedNo || generateUniqueMembershipNo(members, req.body.province || "ZA");
 
+  let finalNatId = req.body.nationalId ? String(req.body.nationalId).trim().toUpperCase().replace(/[\s-]/g, '') : "";
+  let finalIdType = req.body.idType || "BI";
+  if (finalNatId) {
+    const val = validateAngolanIdentification(finalNatId, finalIdType);
+    if (val.valid) {
+      finalNatId = val.formatted;
+      finalIdType = val.idType;
+    }
+  }
+
   const newMember: Member = {
     ...req.body,
     id: `m-${Date.now()}`,
     membershipNo: finalMembershipNo,
-    idType: req.body.idType || "BI",
+    nationalId: finalNatId || req.body.nationalId,
+    idType: finalIdType,
     organizationWing: wing,
     militancyLevel: militancyLevel,
     registrationDate: new Date().toISOString().split("T")[0],
@@ -1737,7 +1755,18 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   }
 
   const cleanEmail = String(email).trim().toLowerCase();
-  const cleanNatId = String(nationalId).trim().toUpperCase();
+  const rawNatId = String(nationalId).trim().toUpperCase().replace(/[\s-]/g, '');
+
+  // Strict Angolan Identification Document Validation (Passport: NXXXXXXX | BI: XXXXXXXXXLAXXX)
+  const idValidation = validateAngolanIdentification(rawNatId, idType);
+  if (!idValidation.valid) {
+    return res.status(400).json({ 
+      error: idValidation.error || "Número de identificação angolano inválido. O Passaporte deve ter o formato NXXXXXXX (ex: N1234567) e o BI deve ter o formato XXXXXXXXXLAXXX (ex: 004928172LA042)." 
+    });
+  }
+
+  const cleanNatId = idValidation.formatted;
+  const verifiedIdType = idValidation.idType;
 
   // Check if member already exists (e.g. from seed data or prior registration)
   const existingIdx = members.findIndex(m => 
@@ -1836,7 +1865,7 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     membershipNo,
     trackingCode,
     nationalId: cleanNatId,
-    idType: idType || "BI",
+    idType: verifiedIdType || idType || "BI",
     fullName: String(fullName).trim(),
     email: cleanEmail,
     mobile: String(mobile).trim(),

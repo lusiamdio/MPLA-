@@ -1648,15 +1648,15 @@ export default function PublicWebsite({
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
               </div>
 
-              {/* Official Photo of Comrade Francisco Carlos */}
-              <div className="relative rounded-xl overflow-hidden border-2 border-[#D4AF37]/50 shadow-lg group-hover:border-[#D4AF37] transition">
+              {/* Official Photo of Comrade Francisco Carlos (9:16 Portrait Ratio) */}
+              <div className="relative rounded-xl overflow-hidden border-2 border-[#D4AF37]/50 shadow-lg group-hover:border-[#D4AF37] transition aspect-[9/16] w-full max-h-[560px] mx-auto bg-slate-950">
                 <img 
                   src={mplaPptImg} 
                   alt="Camarada Francisco Carlos - Primeiro Secretário do Comité do Partido MPLA na África do Sul" 
-                  className="w-full h-64 object-cover object-top hover:scale-105 transition duration-500"
+                  className="w-full h-full object-cover object-top hover:scale-105 transition duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-                <div className="absolute bottom-3 left-3 right-3 text-left">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                <div className="absolute bottom-3.5 left-3.5 right-3.5 text-left">
                   <h3 className="text-lg font-black text-white drop-shadow-md">Camarada Francisco Carlos</h3>
                   <p className="text-[11px] font-mono text-[#D4AF37] font-extrabold tracking-wide drop-shadow-sm">
                     {language === "PT" ? "Primeiro Secretário do Comité do Partido MPLA na África do Sul" : "First Secretary of the MPLA Party Committee in South Africa"}
