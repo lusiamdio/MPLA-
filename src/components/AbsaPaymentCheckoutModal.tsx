@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Member, PaymentLog, AbsaEligibleAccount, AbsaFxRate } from "../types";
 import { safePrintHtml } from "../lib/printUtils";
+import { safeFetchJson, safeFetchJsonQuiet } from "../utils/safeFetch";
 import { 
   X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, 
   Smartphone, Building2, Repeat, CreditCard, Receipt, Lock, Check,
@@ -83,15 +84,13 @@ export default function AbsaPaymentCheckoutModal({
         setPayerIdentifier("4064583487");
       }
 
-      // Fetch live FX rates
-      fetch("/api/absa/fx/rates")
-        .then(r => r.json())
+      // Fetch live FX rates safely
+      safeFetchJsonQuiet<{ rates?: AbsaFxRate[] }>("/api/absa/fx/rates", undefined, {})
         .then(data => {
-          if (data.rates) {
+          if (data?.rates) {
             setFxRates(data.rates);
           }
-        })
-        .catch(() => {});
+        });
     }
   }, [isOpen, member, defaultAmount, defaultPurpose, defaultIsRecurring]);
 
@@ -138,7 +137,7 @@ export default function AbsaPaymentCheckoutModal({
     setErrorMsg("");
 
     try {
-      const resp = await fetch("/api/absa/consent-request", {
+      const data = await safeFetchJson<any>("/api/absa/consent-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -152,12 +151,7 @@ export default function AbsaPaymentCheckoutModal({
           isRecurring,
           recurringInterval
         })
-      });
-
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        throw new Error(data.error || "Falha ao contactar gateway Absa Pay.");
-      }
+      }, "Falha ao contactar gateway Absa Pay.");
 
       setPaymentId(data.paymentId);
       setTransactionId(data.transactionId);
@@ -185,7 +179,7 @@ export default function AbsaPaymentCheckoutModal({
     try {
       const selectedAcc = eligibleAccounts.find(a => a.accountIndex === selectedAccountIndex) || eligibleAccounts[0];
 
-      const resp = await fetch("/api/absa/payment-instruction", {
+      const data = await safeFetchJson<any>("/api/absa/payment-instruction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -200,12 +194,7 @@ export default function AbsaPaymentCheckoutModal({
           accountName: selectedAcc?.accountName || "Current account",
           accountNumberMasked: selectedAcc?.accountNumber || "******3103"
         })
-      });
-
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        throw new Error(data.error || "Falha na liquidação bancária Absa.");
-      }
+      }, "Falha na liquidação bancária Absa.");
 
       setCompletedPayment(data.payment);
       setCreatedSub(data.subscription);

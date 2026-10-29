@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Member, MemberSocialLinks, MemberFieldVisibility, FieldVisibilityLevel } from "../types";
 import { DEFAULT_MEMBER_AVATAR } from "../images";
 import { showToast } from "../lib/notifications";
+import { safeFetchJson } from "../utils/safeFetch";
 import { 
   User, Mail, Phone, MapPin, Briefcase, Award, ShieldAlert, 
   Lock, Key, CheckCircle2, History, AlertCircle, Smartphone, Globe, BookOpen,
@@ -257,17 +258,15 @@ export default function MemberProfile({ member, onUpdateProfile }: MemberProfile
 
     setPwLoading(true);
     try {
-      const res = await fetch(`/api/members/${member.id}/change-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setPwError(data.error || "Erro ao atualizar a palavra-passe.");
-        setPwLoading(false);
-        return;
-      }
+      await safeFetchJson(
+        `/api/members/${member.id}/change-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword })
+        },
+        "Erro ao atualizar a palavra-passe."
+      );
 
       setPwSuccess(true);
       setCurrentPassword("");

@@ -11,6 +11,7 @@ import CertificationProgressBar from "./CertificationProgressBar";
 import AudioTranscriber from "./AudioTranscriber";
 import { showToast } from "../lib/notifications";
 import { safePrintHtml } from "../lib/printUtils";
+import { safeFetchJson, safeFetchJsonQuiet } from "../utils/safeFetch";
 import { 
   LOCAL_JOAO_LOURENCO_IMAGE,
   EVENT_CONFERENCE_COVER,
@@ -1581,9 +1582,12 @@ function DocumentsManagerView({ member }: { member: Member }) {
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/documents/${member.id}`);
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeFetchJsonQuiet<{ success?: boolean; documents?: any[] }>(
+        `/api/documents/${member.id}`,
+        undefined,
+        { success: true, documents: [] }
+      );
+      if (data?.success && Array.isArray(data.documents)) {
         setDocuments(data.documents);
       }
     } catch (err) {
@@ -1926,12 +1930,10 @@ function PaymentsDashboardView({ member, onMakePayment }: { member: Member, onMa
   // Fetch Member Subscriptions
   const fetchSubscriptions = () => {
     setSubsLoading(true);
-    fetch(`/api/absa/recurring-schedules?memberId=${member.id}`)
-      .then(r => r.json())
+    safeFetchJsonQuiet<any[]>(`/api/absa/recurring-schedules?memberId=${member.id}`, undefined, [])
       .then(data => {
         if (Array.isArray(data)) setMemberSubs(data);
       })
-      .catch(() => {})
       .finally(() => setSubsLoading(false));
   };
 

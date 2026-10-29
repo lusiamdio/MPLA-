@@ -54,8 +54,8 @@ export default function CardVerificationScanner({
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.valid && data.member) {
+        const data = await res.json().catch(() => null);
+        if (data && data.valid && data.member) {
           // Merge full member details if found in local state or use verified member
           const fullMem = members.find(m => m.id === data.member.id) || data.member;
           setSelectedMember({ ...fullMem, cardSignature: data.member.cardSignature });

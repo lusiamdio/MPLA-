@@ -670,16 +670,22 @@ export default function PublicWebsite({
   useEffect(() => {
     setLoadingNews(true);
     fetch("/api/news/gemini")
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) return null;
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) return null;
+        return res.json().catch(() => null);
+      })
       .then(data => {
-        setGeminiNewsRaw(data);
-        if (data.articles && data.articles.length > 0) {
-          setNewsArticles(data.articles);
+        if (data) {
+          setGeminiNewsRaw(data);
+          if (data.articles && data.articles.length > 0) {
+            setNewsArticles(data.articles);
+          }
         }
         setLoadingNews(false);
       })
-      .catch(err => {
-        console.error("Error fetching Gemini news:", err);
+      .catch(() => {
         setLoadingNews(false);
       });
   }, []);

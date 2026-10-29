@@ -200,6 +200,38 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
     return () => clearTimeout(timer);
   }, [mode, countdown]);
 
+  // Safe JSON response parser to prevent "Unexpected token 'T', 'The page c'... is not valid JSON" errors
+  const safeFetchJson = async (response: Response, defaultError: string) => {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      try {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || defaultError);
+        }
+        return data;
+      } catch (err: any) {
+        if (err.message && !err.message.includes("is not valid JSON")) {
+          throw err;
+        }
+      }
+    }
+
+    // When the server or proxy returns an HTML page (e.g. 404, 502, "The page cannot be found...")
+    const rawText = await response.text();
+    if (!response.ok) {
+      if (rawText.includes("The page") || rawText.includes("<!DOCTYPE") || rawText.includes("<html")) {
+        throw new Error("O servidor ou a rede retornou uma página de erro inesperada. Por favor, tente novamente.");
+      }
+      throw new Error(rawText.slice(0, 160) || defaultError);
+    }
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      throw new Error(defaultError);
+    }
+  };
+
   // Handle Login submission
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,10 +249,7 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
         body: JSON.stringify({ identifier, password, role })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "A autenticação falhou. Verifique as credenciais.");
-      }
+      const data = await safeFetchJson(response, "A autenticação falhou. Verifique as credenciais.");
 
       // Success
       if (rememberMe) {
@@ -299,10 +328,7 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
         body: JSON.stringify({ identifier, otpCode: fullCode, role })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Código de verificação OTP inválido ou expirado.");
-      }
+      const data = await safeFetchJson(response, "Código de verificação OTP inválido ou expirado.");
 
       onLoginSuccess(data.user, data.role);
     } catch (err: any) {
@@ -409,10 +435,7 @@ export default function AuthPortal({ onLoginSuccess, onBackToWeb, initialMode }:
         body: JSON.stringify(signUpData)
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Registration rejected.");
-      }
+      const data = await safeFetchJson(response, "O registo de militante não foi aceite. Verifique os dados introduzidos.");
 
       clearSignUpDraft();
       setMode("success");

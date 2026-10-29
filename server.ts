@@ -5679,7 +5679,19 @@ app.post("/api/birthday-service/trigger", (req, res) => {
 
 // 404 JSON Fallback for all /api routes to prevent Vite from returning index.html
 app.all("/api/*", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
   res.status(404).json({ error: `Rota API não encontrada: ${req.method} ${req.path}` });
+});
+
+// Global JSON Error Handler Middleware to prevent returning HTML error pages
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(`[EXPRESS SERVER ERROR] ${req.method} ${req.path}:`, err?.message || err);
+  if (res.headersSent) return;
+  res.setHeader("Content-Type", "application/json");
+  res.status(err.status || 500).json({
+    error: err.message || "Ocorreu um erro interno no servidor.",
+    success: false
+  });
 });
 
 // Sync state from live Supabase PostgreSQL database

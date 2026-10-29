@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Member, PaymentLog, AbsaFxRate } from "../types";
 import { safePrintHtml } from "../lib/printUtils";
+import { safeFetchJson, safeFetchJsonQuiet } from "../utils/safeFetch";
 import { 
   X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, 
   Smartphone, QrCode, CreditCard, Receipt, Lock, Check,
@@ -83,16 +84,14 @@ export default function VodaPayPaymentCheckoutModal({
         setPayerPhone("+27 82 890 4120");
       }
 
-      // Fetch live FX rates
-      fetch("/api/absa/fx/rates")
-        .then(r => r.json())
+      // Fetch live FX rates safely
+      safeFetchJsonQuiet<{ rates?: AbsaFxRate[] }>("/api/absa/fx/rates", undefined, {})
         .then(data => {
-          if (data.rates) {
+          if (data?.rates) {
             const zr = data.rates.find((r: AbsaFxRate) => r.currencyPair === "ZARAOA");
             if (zr) setFxRate(zr.midRate);
           }
-        })
-        .catch(() => {});
+        });
     }
   }, [isOpen, member, defaultAmount, defaultPurpose, defaultIsRecurring]);
 
@@ -133,7 +132,7 @@ export default function VodaPayPaymentCheckoutModal({
 
     try {
       const orderReqId = `VPAY-REQ-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const resp = await fetch("/api/vodapay/payments/create", {
+      const data = await safeFetchJson<any>("/api/vodapay/payments/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -163,10 +162,9 @@ export default function VodaPayPaymentCheckoutModal({
           isRecurring,
           recurringInterval
         })
-      });
+      }, "Falha ao contactar o Gateway VodaPay.");
 
-      const data = await resp.json();
-      if (!resp.ok || data.resultInfo?.resultStatus === "F") {
+      if (data.resultInfo?.resultStatus === "F") {
         throw new Error(data.resultInfo?.resultMessage || "Falha ao contactar o Gateway VodaPay.");
       }
 
@@ -195,7 +193,7 @@ export default function VodaPayPaymentCheckoutModal({
     setErrorMsg("");
 
     try {
-      const resp = await fetch("/api/vodapay/payments/confirm", {
+      const data = await safeFetchJson<any>("/api/vodapay/payments/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,10 +205,9 @@ export default function VodaPayPaymentCheckoutModal({
           purpose,
           authMethod
         })
-      });
+      }, "Falha na liquidação do pagamento VodaPay.");
 
-      const data = await resp.json();
-      if (!resp.ok || data.resultCode !== "SUCCESS") {
+      if (data.resultCode !== "SUCCESS") {
         throw new Error(data.resultMessage || "Falha na liquidação do pagamento VodaPay.");
       }
 
