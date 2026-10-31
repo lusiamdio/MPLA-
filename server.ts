@@ -28,7 +28,7 @@ import {
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 
 // Security Headers Middleware
 app.use((req, res, next) => {
@@ -5775,22 +5775,42 @@ async function startServer() {
   await syncFromSupabase();
 
   if (process.env.NODE_ENV !== "production") {
+    // Local development
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
+
     app.use(vite.middlewares);
-  } else {
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(
+        `[FULL-STACK PORTAL] Server listening on http://localhost:${PORT}`
+      );
+    });
+
+  } else if (!process.env.VERCEL) {
+    // Production deployment on a traditional Node.js server
     const distPath = path.join(process.cwd(), "dist");
+
     app.use(express.static(distPath));
+
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
-  }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[FULL-STACK PORTAL] Server listening on http://localhost:${PORT}`);
-  });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(
+        `[FULL-STACK PORTAL] Server listening on port ${PORT}`
+      );
+    });
+  }
 }
 
-startServer();
+// Start the server only outside Vercel
+if (!process.env.VERCEL) {
+  startServer().catch((error) => {
+    console.error("[SERVER STARTUP ERROR]", error);
+    process.exit(1);
+  });
+}
